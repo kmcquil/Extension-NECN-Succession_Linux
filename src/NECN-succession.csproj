@@ -53,7 +53,7 @@
       <HintPath>..\..\build\extensions\Landis.Library.LeafBiomassCohorts-v2.dll</HintPath>
     </Reference>
     <Reference Include="Landis.Library.Metadata-v2">
-      <HintPath>..\..build\extensions\Landis.Library.Metadata-v2.dll</HintPath>
+      <HintPath>..\..\build\extensions\Landis.Library.Metadata-v2.dll</HintPath>
     </Reference>
     <Reference Include="Landis.Library.Parameters-v2">
       <HintPath>..\..\build\extensions\Landis.Library.Parameters-v2.dll</HintPath>
