@@ -43,7 +43,7 @@
     <Reference Include="Landis.Library.BiomassCohorts-v3">
       <HintPath>..\..build\extensions\Landis.Library.BiomassCohorts-v3.dll</HintPath>
     </Reference>
-    <Reference Include="Landis.Library.Climate-v4">
+    <Reference Include="Landis.Library.Climate-v4.3">
       <HintPath>..\..build\extensions\Landis.Library.Climate-v4.3.dll</HintPath>
     </Reference>
     <Reference Include="Landis.Library.Cohorts-v2">
@@ -59,7 +59,7 @@
       <HintPath>..\..build\extensions\Landis.Library.Parameters-v2.dll</HintPath>
     </Reference>
     <Reference Include="Landis.Library.Succession-v8">
-      
+      <HintPath>..\..build\extensions\Landis.Library.Succession-v8.dll</HintPath>
     </Reference>
     <Reference Include="Landis.Library.InitialCommunity.Biomass">
       <HintPath>..\..build\extensions\Landis.Library.InitialCommunity.Biomass.dll</HintPath>
