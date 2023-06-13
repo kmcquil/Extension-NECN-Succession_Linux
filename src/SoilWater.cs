@@ -17,7 +17,6 @@ namespace Landis.Extension.Succession.NECN
     public class SoilWater
     {
         private static double Precipitation;
-        //private static double Precipitation;
         private static double tave;
         private static double tmax;
         private static double tmin;
@@ -25,10 +24,10 @@ namespace Landis.Extension.Succession.NECN
         private static int daysInMonth;
         private static int beginGrowing;
         private static int endGrowing;
-        //private static double holdingTank = 0.0;
 
         // KM: The updated transpiration calculation is set up to run using the Henne approach with some modifications
-        public static void Run_Henne_One(int year, int month, double liveBiomass, Site site, out double availableWaterMax, out double soilWaterContent) /// fix the inputs and outputs 
+        // KM: Split the soil water model into two parts so that transpiration can be calculated after the first part and then subtracted in the second part 
+        public static void Run_Henne_One(int year, int month, double liveBiomass, Site site, out double availableWaterMax, out double soilWaterContent) 
        {
            //     Original Water Submodel for Century - written by Bill Parton
             //     Updated from Fortran  - rm 2/92
@@ -43,10 +42,10 @@ namespace Landis.Extension.Succession.NECN
             double addToSoil = 0.0;
             double bareSoilEvap = 0.0;
             double snow = 0.0;
-            double priorWaterAvail = SiteVars.AvailableWater[site];
+            double priorWaterAvail = SiteVars.AvailableWater[site]; // KM: added this
             double remainingPET = 0.0;
             availableWaterMax = 0.0; 
-            double priorAvailableWaterMin = SiteVars.AvailableWaterMin[site]; 
+            double priorAvailableWaterMin = SiteVars.AvailableWaterMin[site];  // KM: added this for available water calculation in first half
 
             //...Calculate external inputs
             IEcoregion ecoregion = PlugIn.ModelCore.Ecoregion[site];
@@ -167,28 +166,18 @@ namespace Landis.Extension.Succession.NECN
 
             //PH: Add liquid water to soil
             soilWaterContent += addToSoil;
-            // KM: Delted the additional '+ addToSoil' because it's already taken out of soilwatercontent in 2 lines above 
+            // KM: Delted the additional '+ addToSoil' because it's already taken out of soilwatercontent in line above 
             //availableWaterMax = soilWaterContent - waterEmpty + addToSoil;
             availableWaterMax = soilWaterContent - waterEmpty;
-
-            // Calculate transpiration using the original method during winter months when updated transpiration calculation does not perform well since its based on npp
-            double og_et = 0.0;
-            if((soilWaterContent - waterEmpty) >= remainingPET)
-            {
-                og_et = remainingPET;
-            }else
-            {
-                og_et = Math.Min(remainingPET * ((soilWaterContent - waterEmpty) / (waterFull - waterEmpty)), soilWaterContent - waterEmpty);
-            }
-            og_et = Math.Min(soilWaterContent - waterEmpty, og_et);
-            SiteVars.OG_ET[site] = og_et;
             
             // KM: Transpiration calculations moved to a new script (cohortBiomass.cs) to be done at the species cohort level 
             // KM: Output the plant available water for species cohort transpiration calculations 
             // KM: Original approach to calculating available water is to find the average of an over and under estiamte.
             // KM: However, MinAvailableWater can't be calculated until after transpiration. So instead use the MinAvailableWater from the prior month
             SiteVars.AvailableWaterTranspiration[site] = System.Math.Min(((availableWaterMax + priorAvailableWaterMin) / 2.0), soilWaterContent - waterEmpty);
-            SiteVars.CapWater[site] = soilWaterContent - waterEmpty; // Max water available to plants 
+           
+           // KM: Calculate the total water accessible to plants. This is used to cap the transpiration rate of each cohort
+           SiteVars.CapWater[site] = soilWaterContent - waterEmpty; 
 
             SiteVars.AnnualPotentialEvapotranspiration[site] += PET * 10.0;  // Convert to mm, the standard definition
             SiteVars.LiquidSnowPack[site] = liquidSnowpack;

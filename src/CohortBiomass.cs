@@ -457,8 +457,8 @@ namespace Landis.Extension.Succession.NECN
              IEcoregion ecoregion = PlugIn.ModelCore.Ecoregion[site];
             
             // KM: Calculate transpiration within the NPP function to make sure carbon and water fluxes are being calculated together and because npp is necessary for transpiration calculations 
-            // KM: Use aboveground NPP rate
-            double NPP = AGNPP[0] + AGNPP[1];
+            double NPP = AGNPP[0] + AGNPP[1] + (NPPcoarseRoot/0.47) + (NPPfineRoot/0.47);
+            //double NPP = NPPwood + NPPleaf + NPPcoarseRoot + NPPfineRoot;
             Calculate_Transpiration(cohort, site, ecoregion, NPP);
 
             SiteVars.AGNPPcarbon[site] += NPPwood + NPPleaf;
@@ -689,15 +689,14 @@ namespace Landis.Extension.Succession.NECN
             double tmin = ClimateRegionData.AnnualWeather[ecoregion].MonthlyMinTemp[Main.Month];
             double H2Oinputs = ClimateRegionData.AnnualWeather[ecoregion].MonthlyPrecip[Main.Month]; //rain + irract;
             double pet = ClimateRegionData.AnnualWeather[ecoregion].MonthlyPET[Main.Month];
-            
-            // KM: update the plant available water and the pet to be cohort specific
-            double availableSW = AvailableSoilWater.GetSWAllocation(cohort);
-            double fractionSW = AvailableSoilWater.GetSWFraction(cohort);
-            double cohort_pet = pet*fractionSW;
+
+            // KM: Use available water based on max + min (prior month)
+            double availableSW = SiteVars.AvailableWaterTranspiration[site];
 
             if (pet >= 0.01)
             {   
-                Ratio_AvailWaterToPET = (availableSW / cohort_pet);  //Modified by ML so that we weren't double-counting precip as in above equation
+               //Ratio_AvailWaterToPET = (availableSW / cohort_pet);  
+                Ratio_AvailWaterToPET = (availableSW / pet);
             }
             else Ratio_AvailWaterToPET = 0.01;
 
@@ -719,6 +718,23 @@ namespace Landis.Extension.Succession.NECN
               
             if (WaterLimit > 1.0)  WaterLimit = 1.0;
             if (WaterLimit < 0.01) WaterLimit = 0.01;
+
+
+            // write to the calibration log for testing purposes 
+            if (PlugIn.ModelCore.CurrentTime > 0 && OtherData.CalibrateMode)
+                {
+                    CalibrateLog.cwl_ratio_availwatertopet = Ratio_AvailWaterToPET;
+                    CalibrateLog.cwl_watercontent = waterContent;
+                    CalibrateLog.cwl_tmin = tmin;
+                    CalibrateLog.cwl_h2oinputs = H2Oinputs;
+                    CalibrateLog.cwl_pet = pet;
+                    CalibrateLog.cwl_availablesw = availableSW;
+                    CalibrateLog.cwl_moisturecurve2 = moisturecurve2;
+                    CalibrateLog.cwl_moisturecurve3= moisturecurve3;
+                    CalibrateLog.cwl_intcpt = intcpt;
+                    CalibrateLog.cwl_slope = slope;
+
+                }
 
             //PlugIn.ModelCore.UI.WriteLine("Intercept={0}, Slope={1}, WaterLimit={2}.", intcpt, slope, WaterLimit);     
             return WaterLimit;
@@ -769,14 +785,16 @@ namespace Landis.Extension.Succession.NECN
         }
 
         // KM: VPD used in transpiration calculation 
-        // KM: VPD and transpiration calculations based on pnet approach developed by Mark Kubiske
-        // KM: de Bruijna et al. 2014 
+        // KM: VPD and transpiration calculations based on pnet approach developed by Mark Kubiske for LANDIS-II PnET extension (de Bruijna et al. 2014)
         // KM: Added relative humidity as a climate input for more accurate vpd estiamtion 
+        
+        // Calculate Vapor Pressure 
         private static double Calculate_VP(double a, double b, double c, double T)
         {
             return a * (double)Math.Exp(b * T / (T + c));
         }
-
+        
+        // Calculate Vapor Pressure Deficit (VPD)
         private static double Calculate_VPD(double Tday, double Tmin, IEcoregion ecoregion)
         {
 
@@ -791,11 +809,11 @@ namespace Landis.Extension.Succession.NECN
             return Es * (1-(rh/100));
         }
 
-        //  KM: Calculate transpiration for a cohort 
+        //  KM: Calculate cohort transpiration
         private static void Calculate_Transpiration(ICohort cohort, ActiveSite site, IEcoregion ecoregion, double npp)
         {
 
-            //calculate the vpd 
+            // Calculate the VPD
             double Tmin = ClimateRegionData.AnnualWeather[ecoregion].MonthlyMinTemp[Main.Month];
             double Tmax = ClimateRegionData.AnnualWeather[ecoregion].MonthlyMaxTemp[Main.Month];
             double Tave = (double)0.5 * (Tmin + Tmax);
@@ -808,21 +826,6 @@ namespace Landis.Extension.Succession.NECN
             // Calcualte GPP  (GPP = NPP + Ra)
             // Asssume Ra is 50% of GPP (Marthews et al., 2012; Chambers et al., 2004; Zhang, Xu, Chen, & Adams, 2009; iao et al., 2010)
             double GrossPsn = (npp) * 2;
-
-            // Calculate WUE scalar tuning parameter using power function 
-            //double WUEscalar = 0.0;
-            //double Fwue1 = FunctionalType.Table[SpeciesData.FuncType[cohort.Species]].Fwue1;
-            //double Fwue2 = FunctionalType.Table[SpeciesData.FuncType[cohort.Species]].Fwue2;
-
-            //double water_stress = calculateWater_Limit(site, cohort, ecoregion, cohort.Species);
-            //if((1-water_stress) <= Fwue1)
-            //{
-            //    WUEscalar = 1.0;
-            //}
-            //else
-            //{
-            //    WUEscalar = 1/(Math.Exp(Fwue2*((1-water_stress)-Fwue1)));
-            //}
 
             // Calculate foliar nitrogen assuming C 47% of leaf mass
             double FolN = 47/SpeciesData.LeafCN[cohort.Species];
@@ -838,23 +841,15 @@ namespace Landis.Extension.Succession.NECN
             double JCO2 = (double)(0.139 * ((CO2 - CiElev) / V) * 0.00001);
             double JH2Osp = (double)(0.239 * (VPD / (8314.47 * (Tmin + 273))));
             double JH2O = JH2Osp * CiModifier;
-            //double WUE = (JCO2/JH2O) * WUEscalar;
             double WUE = JCO2/JH2O;
 
             // Calculate transpiraiton 
             double Transpiration = (double)(0.01227 * (GrossPsn / WUE) /10); // the 10 converts to cm
 
-            // Cap transpiration at available water 
+            // Cap transpiration at upper limit of water in cell available to plants 
             double AvailableSW = AvailableSoilWater.GetCapWater(cohort);
             double AvailableSWfraction = AvailableSoilWater.GetSWFraction(cohort); 
             double ActualTranspiration = Math.Min(AvailableSW, Transpiration);
-
-            // If it is a non-growing season month, then calculate transpiration using the original method and scale it by fraction of water allocated to each species so it totals to the right amount 
-            if(Main.Month == 9 || Main.Month == 10 || Main.Month == 11 || Main.Month == 0 || Main.Month == 1 ||Main.Month == 2){
-                Transpiration = SiteVars.OG_ET[site] * AvailableSWfraction;
-                ActualTranspiration = Transpiration;
-                ActualTranspiration = Math.Min(AvailableSW, Transpiration);
-            }
 
             // Add to overall site monthly and annual transpiration 
             SiteVars.Transpiration[site] += ActualTranspiration;
